@@ -1,0 +1,68 @@
+# Byte-compiled / optimized / DLL files
+__pycache__/
+*.py[cod]
+*.pyo
+
+# Virtual environments
+venv/
+env/
+.venv/
+.env/
+*.env
+
+# Conda environment
+*.conda
+*.ipynb_checkpoints
+
+# VSCode and PyCharm settings
+.vscode/
+.idea/
+
+# OS files
+.DS_Store
+Thumbs.db
+
+# Python cache
+*.log
+*.sqlite3
+*.db
+*.pid
+
+# Environment & Secrets
+.env
+.env.*
+
+# Pytest
+.cache/
+.pytest_cache/
+
+# Migrations (if using Alembic)
+alembic/versions/
+
+# Compiled files
+*.so
+*.egg
+*.egg-info/
+dist/
+build/
+
+# Coverage and test reports
+htmlcov/
+coverage.xml
+*.cover
+*.py,cover
+
+# MySQL dump files (if any)
+*.sql
+
+# Uvicorn log files
+uvicorn.log
+
+# Jupyter (if applicable)
+.ipynb_checkpoints/
+
+#My Files
+system_design.txt
+dependency.txt
+dependency.md
+stories/
