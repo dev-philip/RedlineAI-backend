@@ -21,3 +21,5 @@ pypdf
 unstructured
 docx2txt
 tiktoken
+pymysql
+tidb-vector

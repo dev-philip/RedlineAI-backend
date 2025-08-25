@@ -93,6 +93,7 @@ pip install -r requirements.txt
    Note : This overwrites requirements.txt with everything currently installed in your environment — good for syncing it all, but might include extras you don’t want.
 
 9. Start Project Server :
+   `conda activate redline-ai-env`
    `uvicorn app.main:app --reload`
 
 ## Some endpoint to check

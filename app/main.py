@@ -10,6 +10,8 @@ from app.shared.errors import AppError
 from app.db import tidb_engine as engine, Base, get_tidb_session as get_session
 from app import models  # 👈 this pulls in everything under app/models
 from app.routers import tidb_router, vector_router
+from app.routers.ingest import router as ingest_router  # 👈 NEW
+from app.routers import search as search_router
 
 
 @asynccontextmanager
@@ -69,4 +71,6 @@ async def health():
 api_router = APIRouter(prefix="/api/v1")
 api_router.include_router(tidb_router.router, prefix="/tidb", tags=["Test TIDB Database"])
 api_router.include_router(vector_router.router, prefix="/vector", tags=["Vector Demo"])
+api_router.include_router(ingest_router)  # 👈 NEW => /api/v1/ingest
+api_router.include_router(search_router.router, prefix="/search", tags=["Search"])
 app.include_router(api_router)
