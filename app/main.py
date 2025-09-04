@@ -9,9 +9,16 @@ from fastapi.responses import JSONResponse
 from app.shared.errors import AppError
 from app.db import tidb_engine as engine, Base, get_tidb_session as get_session
 from app import models  # 👈 this pulls in everything under app/models
-from app.routers import tidb_router, vector_router
+from app.routers import tidb_router, vector_router, s3_router, auth_router, contracts_analysis_llm, alerts
 from app.routers.ingest import router as ingest_router  # 👈 NEW
+from app.routers import contracts_analysis  # add import
 from app.routers import search as search_router
+
+
+# import os
+# from apscheduler.schedulers.asyncio import AsyncIOScheduler
+# from app.db import async_session_factory
+# from app.services.alert_dispatcher import run_alerts_once
 
 
 @asynccontextmanager
@@ -57,6 +64,32 @@ async def general_exception_handler(request: Request, exc: Exception):
     logger.error(f"Error occurred on path {request.url.path}: {str(exc)}")
     return JSONResponse(status_code=500, content={"detail": "An unexpected error occurred. Please try again later."})
 
+
+# scheduler = AsyncIOScheduler()
+
+# async def _alerts_job():
+#     async with async_session_factory() as session:
+#         await run_alerts_once(session)
+
+# @app.on_event("startup")
+# async def on_startup():
+#     # Only start the scheduler if explicitly enabled (avoid dup in --reload or multi-workers)
+#     if os.getenv("RUN_ALERTS_SCHEDULER", "0") == "1":
+#         scheduler.add_job(
+#             _alerts_job,
+#             "interval",
+#             seconds=60,
+#             id="alerts-job",
+#             max_instances=1,
+#             coalesce=True,
+#         )
+#         scheduler.start()
+
+# @app.on_event("shutdown")
+# async def on_shutdown():
+#     if os.getenv("RUN_ALERTS_SCHEDULER", "0") == "1":
+#         scheduler.shutdown(wait=False)
+
 # Root
 @app.get("/")
 def read_root():
@@ -69,8 +102,13 @@ async def health():
 
 # API router
 api_router = APIRouter(prefix="/api/v1")
+api_router.include_router(auth_router.router, prefix="/auth", tags=["Auth"])
+api_router.include_router(contracts_analysis_llm.router, prefix="/llm", tags=["LLM Process"])
+api_router.include_router(alerts.router, prefix="/alerts", tags=["Test Alert"])
 api_router.include_router(tidb_router.router, prefix="/tidb", tags=["Test TIDB Database"])
 api_router.include_router(vector_router.router, prefix="/vector", tags=["Vector Demo"])
+api_router.include_router(s3_router.router, prefix="/s3", tags=["Aws S3 bucket"])
 api_router.include_router(ingest_router)  # 👈 NEW => /api/v1/ingest
 api_router.include_router(search_router.router, prefix="/search", tags=["Search"])
+api_router.include_router(contracts_analysis.router, tags=["Contracts"])
 app.include_router(api_router)

@@ -23,3 +23,8 @@ docx2txt
 tiktoken
 pymysql
 tidb-vector
+boto3
+python-jose[cryptography]
+google-auth
+twilio
+sendgrid

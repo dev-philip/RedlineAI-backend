@@ -14,7 +14,6 @@ from app.services.contract_vector_store import (
     contract_exists_by_sha,
 )
 
-
 # ---- State ----
 class IngestState(TypedDict):
     file_path: str
@@ -59,10 +58,13 @@ def load_file(state: IngestState) -> IngestState:
     if state.get("skipped"):
         return state
 
-    # Base metadata that will be attached to every page/doc
+    # Base metadata attached to every loaded page/document
     base_meta = dict(state["meta"])
     base_meta["contract_id"] = state["contract_id"]
+    base_meta["sha256"] = state["sha256"]
     base_meta.setdefault("original_filename", base_meta.get("source_file"))
+    if base_meta.get("tags") is None:
+        base_meta["tags"] = []
 
     docs = load_any(
         state["file_path"],
@@ -76,18 +78,49 @@ def load_file(state: IngestState) -> IngestState:
 def chunk(state: IngestState) -> IngestState:
     if state.get("skipped"):
         return state
-    # ~800/120 is a solid default for RAG on contracts
-    state["chunks"] = split_docs(state["docs"], chunk_size=800, chunk_overlap=120)
+    # ✅ use the right parameter names for your helper
+    chunks = split_docs(state["docs"], chunk_size=800, chunk_overlap=120)
+
+    # Ensure every chunk has an index and required metadata
+    enriched: List[Document] = []
+    for i, ch in enumerate(chunks):
+        md = dict(ch.metadata or {})
+        md.setdefault("chunk_index", i)
+        md.setdefault("contract_id", state["contract_id"])
+        md.setdefault("sha256", state["sha256"])
+        md.setdefault("tenant", state["meta"].get("tenant"))
+        md.setdefault("doc_type", state["meta"].get("doc_type"))
+        md.setdefault("original_filename", state["meta"].get("original_filename"))
+        md.setdefault("tags", state["meta"].get("tags", []) or [])
+        enriched.append(Document(page_content=ch.page_content, metadata=md))
+
+    state["chunks"] = enriched
     return state
 
 
 def embed_store(state: IngestState) -> IngestState:
     if state.get("skipped"):
         return state
+
+    # Final guard to ensure metadata keys exist on every chunk
+    enforced_chunks: List[Document] = []
+    for i, ch in enumerate(state["chunks"]):
+        md = dict(ch.metadata or {})
+        md.setdefault("chunk_index", i)
+        md.setdefault("contract_id", state["contract_id"])
+        md.setdefault("sha256", state["sha256"])
+        md.setdefault("tenant", state["meta"].get("tenant"))
+        md.setdefault("doc_type", state["meta"].get("doc_type"))
+        md.setdefault("original_filename", state["meta"].get("original_filename"))
+        md.setdefault("tags", state["meta"].get("tags", []) or [])
+        enforced_chunks.append(Document(page_content=ch.page_content, metadata=md))
+
     vs = get_vectorstore()
-    # Stores content + embedding + metadata (DB column name is "metadata")
-    ids = vs.add_documents(state["chunks"])
+    # TiDBVectorStore stores Document.metadata into the `meta` JSON column
+    ids = vs.add_documents(enforced_chunks)
+
     state["stored_ids"] = ids
+    state["chunks"] = enforced_chunks
     return state
 
 

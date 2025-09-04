@@ -3,15 +3,23 @@ import ssl
 import urllib.parse
 from typing import AsyncGenerator
 
-from sqlalchemy.ext.asyncio import create_async_engine, AsyncSession, AsyncEngine
-from sqlalchemy.orm import sessionmaker, DeclarativeBase
-from sqlalchemy import create_engine as create_sync_engine  # NEW
+from sqlalchemy.ext.asyncio import (
+    create_async_engine,
+    AsyncSession,
+    AsyncEngine,
+    async_sessionmaker,
+)
+from sqlalchemy.orm import DeclarativeBase
+from sqlalchemy import create_engine as create_sync_engine
+
 from app.config import settings
+
 
 class Base(DeclarativeBase):
     pass
 
-# ---------- ASYNC (unchanged) ----------
+
+# ---------- ASYNC ----------
 def _tidb_async_url() -> str:
     if not all([settings.TIDB_HOST, settings.TIDB_DB, settings.TIDB_USER, settings.TIDB_PASSWORD]):
         raise RuntimeError("TiDB env vars are missing. Check TIDB_* in your .env.")
@@ -39,16 +47,28 @@ tidb_engine: AsyncEngine = create_async_engine(
     connect_args={"ssl": _tls_context()},
 )
 
-TidbSessionLocal = sessionmaker(bind=tidb_engine, class_=AsyncSession, expire_on_commit=False)
+TidbSessionLocal = async_sessionmaker(
+    bind=tidb_engine,
+    expire_on_commit=False,
+    class_=AsyncSession,
+)
 
 async def get_tidb_session() -> AsyncGenerator[AsyncSession, None]:
     async with TidbSessionLocal() as session:
         yield session
 
-# ---------- SYNC (NEW) ----------
+# Expose FastAPI deps
+get_db = get_tidb_session
+
+def get_sessionmaker():
+    # Return the callable async sessionmaker (for dependencies.py to use)
+    return TidbSessionLocal
+
+
+# ---------- SYNC (for contract_vector_store) ----------
 def _tidb_sync_url() -> str:
     """
-    Build a mysql+pymysql URL with TLS query args (works well on Windows).
+    Build a mysql+pymysql URL with TLS query args (handy on Windows/TiDB Cloud).
     """
     user = urllib.parse.quote_plus(settings.TIDB_USER)
     pwd = urllib.parse.quote_plus(settings.TIDB_PASSWORD)
@@ -58,12 +78,12 @@ def _tidb_sync_url() -> str:
 
     q = {"charset": "utf8mb4"}
     if settings.TIDB_SSL_CA:
-        # TiDB Cloud accepts these query params with PyMySQL
+        # TiDB Cloud accepts these as query params for PyMySQL
         q["ssl_ca"] = settings.TIDB_SSL_CA
         q["ssl_verify_cert"] = "true" if settings.TIDB_SSL_VERIFY_CERT else "false"
         q["ssl_verify_identity"] = "true" if settings.TIDB_SSL_VERIFY_IDENTITY else "false"
 
-    qs = urllib.parse.urlencode(q, safe="/:\\")  # keep Windows paths intact
+    qs = urllib.parse.urlencode(q, safe="/:\\")  # keep Windows file paths intact
     return f"mysql+pymysql://{user}:{pwd}@{host}:{port}/{db}?{qs}"
 
 tidb_sync_engine = create_sync_engine(

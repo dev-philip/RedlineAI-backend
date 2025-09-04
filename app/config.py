@@ -41,9 +41,31 @@ class Settings(BaseSettings):
     TIDB_SSL_VERIFY_IDENTITY: bool = True
 
     # Google OAuth
+    SECRET_KEY: str
     GOOGLE_CLIENT_ID: str
     GOOGLE_CLIENT_SECRET: str
     GOOGLE_REDIRECT_URI: str
+
+
+    # AWS Credentials for S3 Bucket
+    AWS_ACCESS_KEY_ID: str
+    AWS_SECRET_ACCESS_KEY: str
+    AWS_DEFAULT_REGION: str
+    S3_BUCKET_NAME: str
+    S3_PREFIX: str
+
+    langchain_table: str
+
+    # langchain_table: str = "tidb_vector_langchain"
+    llm_model_name: str = "gpt-4o-mini"
+    policy_text: str = (
+        "Our default policy: "
+        "- No auto-renew without explicit opt-in or <=30-day termination window.\n"
+        "- Liability cap >= fees for 12 months; exclude indirect damages.\n"
+        "- Governing law: home jurisdiction preferred.\n"
+        "- SLA uptime >= 99.9% with credits.\n"
+        "- NDA confidentiality standard; IP remains with owner.\n"
+    )
 
     class Config:
         env_file = ".env"

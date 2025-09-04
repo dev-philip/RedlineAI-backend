@@ -1,6 +1,7 @@
 # app/models/contract_ingestion_tables.py
+from datetime import datetime
 from sqlalchemy import (
-    Column, String, Integer, BigInteger, Text, TIMESTAMP, func,
+    Column, DateTime, String, Integer, BigInteger, Text, TIMESTAMP, func,
     ForeignKey, UniqueConstraint, Index, event, DDL
 )
 from sqlalchemy.dialects.mysql import JSON as MySQLJSON
@@ -8,6 +9,7 @@ from sqlalchemy.dialects.mysql import JSON as MySQLJSON
 from app.db import Base
 from app.config import settings
 from app.models.sql_types import TiDBVector
+from sqlalchemy.orm import Mapped, mapped_column
 
 
 class Contract(Base):
@@ -17,11 +19,19 @@ class Contract(Base):
     __tablename__ = settings.contracts_table  # e.g., "contracts"
 
     id = Column(String(36), primary_key=True)  # UUID string
+    user_id: Mapped[int] = mapped_column( BigInteger, nullable=True)
     tenant = Column(String(255), nullable=True, index=True)
     doc_type = Column(String(64), nullable=True, index=True)
     original_filename = Column(String(512), nullable=False)
+    s3_file_key = Column(String(512), nullable=True)
     sha256 = Column(String(64), nullable=False)
     uploaded_at = Column(TIMESTAMP, server_default=func.current_timestamp(), nullable=False)
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), server_default=func.now(), nullable=False
+    )
+    updated_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), server_default=func.now(), onupdate=func.now(), nullable=False
+    )
 
     __table_args__ = (
         UniqueConstraint("tenant", "sha256", name="uniq_tenant_sha"),
