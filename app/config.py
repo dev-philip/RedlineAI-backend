@@ -64,6 +64,14 @@ class Settings(BaseSettings):
         "- NDA confidentiality standard; IP remains with owner.\n"
     )
 
+    # SendGrid
+    SENDGRID_API_KEY: str
+    ALERTS_FROM_EMAIL: str 
+
+    #Twillio Credential
+    TWILIO_ACCOUNT_SID:str
+    TWILIO_AUTH_TOKEN:str 
+    TWILIO_FROM_NUMBER:str 
 
     class Config:
         env_file = ".env"

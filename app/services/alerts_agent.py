@@ -14,7 +14,7 @@ try:
 except Exception:
     OpenAI = None
 
-ALERT_SEVERITY_THRESHOLD_DEFAULT = 7
+ALERT_SEVERITY_THRESHOLD_DEFAULT = 8
 #Olamide Severity
 
 
