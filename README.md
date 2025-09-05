@@ -66,18 +66,21 @@ pip install -r requirements.txt
 
 ## How to run the project
 
-1. Create a New Conda Environment
-   `conda create -n redline-ai-env python=3.11`
+1. Clone repo : "https://github.com/dev-philip/RedlineAI-backend"
 2. Create a New Conda Environment
+   `conda create -n redline-ai-env python=3.11`
+3. Create a New Conda Environment
    `conda activate redline-ai-env`
 
-3. Install pip inside the conda environment (optional, but safe to check)
+4. Install pip inside the conda environment (optional, but safe to check)
    `conda install pip`
 
-4. Install your dependencies from requirements.txt
+5. Install your dependencies from requirements.txt
    `pip install -r requirements.txt`
 
-5. Start Project Server :
+6. Copy `isrgrootx1.pem` file from the root project and put it in this location in your local system `C:\certs\isrgrootx1.pem`. This applies to only windows user. For other operating system and For troubleshooting tip for TLS connection with TIDB use this link : https://docs.pingcap.com/tidbcloud/secure-connections-to-serverless-clusters/
+
+7. Start Project Server :
    `uvicorn app.main:app --reload`
 
 ## Other Conda Commands
