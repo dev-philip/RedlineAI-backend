@@ -1,7 +1,8 @@
 # app/db.py
 import ssl
 import urllib.parse
-from typing import AsyncGenerator
+from typing import AsyncGenerator, Optional
+from contextlib import asynccontextmanager
 
 from sqlalchemy.ext.asyncio import (
     create_async_engine,
@@ -20,6 +21,7 @@ class Base(DeclarativeBase):
 
 
 # ---------- ASYNC ----------
+
 def _tidb_async_url() -> str:
     if not all([settings.TIDB_HOST, settings.TIDB_DB, settings.TIDB_USER, settings.TIDB_PASSWORD]):
         raise RuntimeError("TiDB env vars are missing. Check TIDB_* in your .env.")
@@ -47,25 +49,34 @@ tidb_engine: AsyncEngine = create_async_engine(
     connect_args={"ssl": _tls_context()},
 )
 
-TidbSessionLocal = async_sessionmaker(
+# The async sessionmaker you can import in jobs / scripts:
+async_session_maker: async_sessionmaker[AsyncSession] = async_sessionmaker(
     bind=tidb_engine,
     expire_on_commit=False,
     class_=AsyncSession,
 )
 
+# FastAPI dependency (yield-based) — keep for routes:
 async def get_tidb_session() -> AsyncGenerator[AsyncSession, None]:
-    async with TidbSessionLocal() as session:
+    async with async_session_maker() as session:
         yield session
 
-# Expose FastAPI deps
+# Alias for typical FastAPI naming in other modules
 get_db = get_tidb_session
 
-def get_sessionmaker():
-    # Return the callable async sessionmaker (for dependencies.py to use)
-    return TidbSessionLocal
+def get_sessionmaker() -> async_sessionmaker[AsyncSession]:
+    """Return the async sessionmaker (useful for DI or testing)."""
+    return async_session_maker
+
+# Optional: an async context manager wrapper if you prefer `async with open_tidb_session()`
+@asynccontextmanager
+async def open_tidb_session() -> AsyncGenerator[AsyncSession, None]:
+    async with async_session_maker() as session:
+        yield session
 
 
 # ---------- SYNC (for contract_vector_store) ----------
+
 def _tidb_sync_url() -> str:
     """
     Build a mysql+pymysql URL with TLS query args (handy on Windows/TiDB Cloud).

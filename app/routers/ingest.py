@@ -30,7 +30,7 @@ from app.dependencies import get_s3_service
 from app.repositories.contracts_repo import update_contract_file_url_and_user
 
 
-router = APIRouter(tags=["ingestion"])
+router = APIRouter(tags=["Ingestion"])
 
 # Where uploaded files are temporarily staged before parsing
 INGEST_DIR = "/tmp/redline_ingest"
@@ -40,30 +40,42 @@ os.makedirs(INGEST_DIR, exist_ok=True)
 graph = build_ingest_graph()
 
 
-@router.post("/ingest", response_model=List[IngestResponse])
+@router.post(
+"/ingest", 
+response_model=List[IngestResponse], 
+summary="Ingest new data", 
+description="""
+Ingest (PDF parse + chunk + embed + DB + S3)
+""")
 async def ingest_files(
     files: List[UploadFile] = File(...),
     doc_type: Optional[str] = Form(default=None),
     tenant: Optional[str] = Form(default=None),
     tags: Optional[str] = Form(default=None),
+
+    # accept auth-ish hints from the client (for now)
+    is_logged_in: bool = Form(default=False),
+    user_id: Optional[int] = Form(default=None),
+
     # deps
     s3: S3Service = Depends(get_s3_service),
     session: AsyncSession = Depends(get_tidb_session),
 ):
-    # Simulate logged-in user; replace with your auth dependency
-    is_logged_in = True
-    current_user_id: Optional[int] = 1 if is_logged_in else None
-
+    """
+    - Always runs the ingestion graph (register/skip, load, chunk, embed).
+    - Only uploads to S3 and updates the `contracts` row if:
+        is_logged_in is True AND user_id is provided AND this ingest wasn't skipped.
+    """
     results: List[IngestResponse] = []
 
     for f in files:
-        # 1) Persist a temp copy for the ingestion pipeline
+        # 1) Write a temp file for the ingestion pipeline
         tmp_name = f"{uuid.uuid4()}_{f.filename}"
         tmp_path = os.path.join(INGEST_DIR, tmp_name)
         with open(tmp_path, "wb") as out:
             shutil.copyfileobj(f.file, out)
 
-        # 2) Seed metadata for the graph
+        # 2) Prepare base metadata for the graph
         meta: Dict[str, Any] = {
             "original_filename": f.filename,
             "doc_type": doc_type,
@@ -71,6 +83,7 @@ async def ingest_files(
             "tags": [t.strip() for t in (tags.split(",") if tags else [])],
         }
 
+        # graph state
         state = {
             "file_path": tmp_path,
             "meta": meta,
@@ -82,14 +95,18 @@ async def ingest_files(
             "skipped": False,
         }
 
-        # 3) Run the ingestion graph (register/skip, load, chunk, embed+store)
+        # 3) Run ingestion (register/skip, load, chunk, embed)
         final_state = await run_in_threadpool(graph.invoke, state)
 
-        # 4) Upload to S3 only if this wasn’t skipped and we have a contract_id
+        contract_id = final_state.get("contract_id")
+        skipped = bool(final_state.get("skipped"))
+        sha256 = final_state.get("sha256")
+
+        # 4) Optional S3 upload + DB update (only if logged in AND user_id is provided)
         s3_key: Optional[str] = None
-        if not final_state.get("skipped") and final_state.get("contract_id"):
+        if not skipped and contract_id and is_logged_in and user_id is not None:
             try:
-                # Reset the stream to the beginning for upload
+                # Reset the UploadFile stream and upload the original bytes
                 await f.seek(0)
                 upload_result = await s3.upload_fileobj(
                     file=f,
@@ -98,38 +115,37 @@ async def ingest_files(
                 )
                 # Your service returns: {bucket, key, region, url, content_type}
                 s3_key = upload_result.get("key")
-                # keep it in the response metadata too
-                meta["file_url"] = s3_key
+                meta["file_url"] = s3_key  # reflect in response metadata
             except ValueError as ve:
-                # File too large etc.
+                # E.g., file too large
                 raise HTTPException(status_code=413, detail=str(ve))
             except Exception as e:
-                # Don’t fail ingestion if S3 fails; surface the error
+                # Surface S3 error but don't nuke the ingested contract
                 raise HTTPException(status_code=500, detail=f"S3 error: {e}")
 
-            # 5) Update contracts.file_url (and optionally user_id)
-            if s3_key and is_logged_in:
+            # 5) Update contracts.file_url and contracts.user_id
+            if s3_key:
                 await update_contract_file_url_and_user(
                     session=session,
-                    contract_id=final_state["contract_id"],
-                    file_key=s3_key,            # store the S3 key as requested
-                    user_id=current_user_id,    # or None if anonymous
+                    contract_id=contract_id,
+                    file_key=s3_key,
+                    user_id=user_id,
                 )
 
         # 6) Build API response
         results.append(
             IngestResponse(
                 file_name=f.filename,
-                contract_id=final_state.get("contract_id"),
-                sha256=final_state.get("sha256"),
+                contract_id=contract_id,
+                sha256=sha256,
                 chunks=len(final_state.get("chunks", [])),
                 stored_ids=final_state.get("stored_ids", []),
                 metadata=meta,
-                skipped=final_state.get("skipped", False),
+                skipped=skipped,
             )
         )
 
-        # 7) Optional cleanup
+        # 7) Optional: remove tmp
         # try:
         #     os.remove(tmp_path)
         # except Exception:

@@ -28,3 +28,4 @@ python-jose[cryptography]
 google-auth
 twilio
 sendgrid
+APScheduler==3.10.*

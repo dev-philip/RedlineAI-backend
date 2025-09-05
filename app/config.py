@@ -19,13 +19,6 @@ class Settings(BaseSettings):
     REDIS_PORT: int
     REDIS_PASSWORD: str
 
-    # Postgres
-    POSTGRES_USER: str
-    POSTGRES_PASSWORD: str
-    POSTGRES_DB: str
-    POSTGRES_HOST: str
-    POSTGRES_PORT: int  # (int is nicer than str)
-
     # TiDB
     TIDB_HOST: str
     TIDB_PORT: int
@@ -36,7 +29,8 @@ class Settings(BaseSettings):
     TIDB_MAX_OVERFLOW: int
 
     # 🔐 TLS (used in db.py)
-    TIDB_SSL_CA: Optional[str] = "C:\certs\isrgrootx1.pem"
+    # TIDB_SSL_CA: Optional[str] = "C:\certs\isrgrootx1.pem"
+    TIDB_SSL_CA: str
     TIDB_SSL_VERIFY_CERT: bool = True
     TIDB_SSL_VERIFY_IDENTITY: bool = True
 
@@ -54,6 +48,9 @@ class Settings(BaseSettings):
     S3_BUCKET_NAME: str
     S3_PREFIX: str
 
+    #activate schedular 
+    RUN_ALERTS_SCHEDULER: str
+
     langchain_table: str
 
     # langchain_table: str = "tidb_vector_langchain"
@@ -66,6 +63,7 @@ class Settings(BaseSettings):
         "- SLA uptime >= 99.9% with credits.\n"
         "- NDA confidentiality standard; IP remains with owner.\n"
     )
+
 
     class Config:
         env_file = ".env"

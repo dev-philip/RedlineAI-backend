@@ -3,6 +3,7 @@ from __future__ import annotations
 import json
 import logging
 from datetime import datetime
+from zoneinfo import ZoneInfo
 from typing import Any, Dict, List, Optional
 
 from sqlalchemy import text
@@ -11,10 +12,11 @@ from starlette.concurrency import run_in_threadpool
 
 # Your concrete senders; keep these names/signatures the same.
 # If your implementations are async already, call them directly instead of run_in_threadpool.
-from app.services.notifiers import send_email, send_sms, add_google_calendar_event
+from app.services.notifiers import send_email, send_sms, make_call, add_google_calendar_event
 
 log = logging.getLogger(__name__)
 
+LOCAL_TZ = ZoneInfo("America/New_York")  # change if you prefer another tz
 
 async def fetch_due_alerts(session: AsyncSession, limit: int = 50) -> List[Dict[str, Any]]:
     """
@@ -120,6 +122,11 @@ async def _send_via_channels(alert: Dict[str, Any], channels: Dict[str, Any]) ->
         for num in channels["sms"]:
             await run_in_threadpool(send_sms, num, f"{subj}: {body_text}")
 
+    # SMS
+    if "call" in channels and channels["call"]:
+        for num in channels["call"]:
+            await run_in_threadpool(make_call, num, f"{subj}: {body_text}")
+
     # CALENDAR
     if channels.get("calendar"):
         # Use due_at if present; otherwise create an event for "now"
@@ -138,7 +145,11 @@ async def _send_via_channels(alert: Dict[str, Any], channels: Dict[str, Any]) ->
             log.warning("Calendar add failed for alert %s: %s", alert["id"], cal_err)
 
 
-async def run_alerts_once(session: AsyncSession) -> int:
+async def run_alerts_once(
+    session: AsyncSession,
+    run_started_at_utc: Optional[datetime] = None,
+    next_run_at_utc: Optional[datetime] = None,
+) -> int:
     """
     Top-level dispatcher:
       1) fetch due alerts
@@ -147,17 +158,33 @@ async def run_alerts_once(session: AsyncSession) -> int:
       4) mark sent/failed
     Returns number of alerts successfully sent.
     """
-    alerts = await fetch_due_alerts(session)
-    sent = 0
 
-    for a in alerts:
-        channels = decide_channels(a)
-        try:
-            await _send_via_channels(a, channels)
-            await mark_alert(session, a["id"], "sent")
-            sent += 1
-        except Exception as e:
-            log.exception("Alert %s delivery failed: %s", a["id"], e)
-            await mark_alert(session, a["id"], "failed", err=str(e))
+    sent = 0
+     # Fallback to now (UTC) if not provided
+    run_started_at_utc = run_started_at_utc or datetime.now(tz=ZoneInfo("UTC"))
+
+    # Safely convert to local time for readable logs
+    ran_local = run_started_at_utc.astimezone(LOCAL_TZ)
+    next_local = (
+        next_run_at_utc.astimezone(LOCAL_TZ) if next_run_at_utc else None
+    )
+
+    print(
+        "Run Schedular Olamide => [alerts] ran_at_local="
+        f"{ran_local.isoformat()}  ran_at_utc={run_started_at_utc.isoformat()}  "
+        f"next_run_local={(next_local.isoformat() if next_local else 'n/a')}"
+    )
+    # alerts = await fetch_due_alerts(session)
+  
+
+    # for a in alerts:
+    #     channels = decide_channels(a)
+    #     try:
+    #         await _send_via_channels(a, channels)
+    #         await mark_alert(session, a["id"], "sent")
+    #         sent += 1
+    #     except Exception as e:
+    #         log.exception("Alert %s delivery failed: %s", a["id"], e)
+    #         await mark_alert(session, a["id"], "failed", err=str(e))
 
     return sent
