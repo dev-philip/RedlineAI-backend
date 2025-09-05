@@ -77,6 +77,22 @@ pip install -r requirements.txt
 4. Install your dependencies from requirements.txt
    `pip install -r requirements.txt`
 
+5. Start Project Server :
+   `uvicorn app.main:app --reload`
+
+## Other Conda Commands
+
+1. Create a New Conda Environment
+   `conda create -n redline-ai-env python=3.11`
+2. Create a New Conda Environment
+   `conda activate redline-ai-env`
+
+3. Install pip inside the conda environment (optional, but safe to check)
+   `conda install pip`
+
+4. Install your dependencies from requirements.txt
+   `pip install -r requirements.txt`
+
 5. Verify Installed Packages
    `pip list`
 
