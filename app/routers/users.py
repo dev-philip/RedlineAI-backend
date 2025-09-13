@@ -10,12 +10,13 @@ from __future__ import annotations
 from typing import Any, Dict, List, Optional
 from datetime import datetime
 
-from fastapi import APIRouter, Depends, HTTPException, Query
+from fastapi import APIRouter, Depends, HTTPException, Path, Query
 from pydantic import BaseModel
 from sqlalchemy import text
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.db import get_tidb_session
+from app.services.contracts_service import list_contracts_by_user
 from app.services.s3_service import S3Service
 from app.dependencies import get_s3_service
 
@@ -247,4 +248,23 @@ async def user_overview(
         risks_medium=int(risk_row.get("medium", 0)),
         risks_low=int(risk_row.get("low", 0)),
         open_alerts=int(open_alerts or 0),
+    )
+
+
+@router.get(
+    "/{user_id}/contracts",
+    response_model=List[Dict[str, Any]],
+    summary="List contracts uploaded by a user",
+)
+async def get_user_contracts(
+    user_id: int = Path(..., description="User ID"),
+    limit: int = Query(50, ge=1, le=500),
+    offset: int = Query(0, ge=0, le=5000),
+    session: AsyncSession = Depends(get_tidb_session),
+):
+    return await list_contracts_by_user(
+        session,
+        user_id=user_id,
+        limit=limit,
+        offset=offset,
     )
