@@ -12,6 +12,7 @@ from app.services.contract_vector_store import (
     get_vectorstore,
     insert_contract_row,
     contract_exists_by_sha,
+    get_contract_id_by_sha,  # <-- NEW
 )
 
 # ---- State ----
@@ -32,10 +33,14 @@ def register_or_skip(state: IngestState) -> IngestState:
     state["sha256"] = sha
 
     tenant = state["meta"].get("tenant")
+    # Duplicate? return early but include the existing contract_id
     if contract_exists_by_sha(sha, tenant):
+        existing_id = get_contract_id_by_sha(sha, tenant)
+        state["contract_id"] = existing_id or ""
         state["skipped"] = True
         return state
 
+    # New contract → insert a row and proceed
     contract_id = str(uuid.uuid4())
     state["contract_id"] = contract_id
 
@@ -78,7 +83,8 @@ def load_file(state: IngestState) -> IngestState:
 def chunk(state: IngestState) -> IngestState:
     if state.get("skipped"):
         return state
-    # ✅ use the right parameter names for your helper
+
+    # Split into chunks for RAG
     chunks = split_docs(state["docs"], chunk_size=800, chunk_overlap=120)
 
     # Ensure every chunk has an index and required metadata
